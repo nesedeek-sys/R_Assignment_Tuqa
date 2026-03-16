@@ -1,0 +1,2 @@
+"0","maize_all_joined <- inner_join(snp_important_info, maize_transpose, by = ""SNP_ID"")"
+"0","teosinte_all_joined <- inner_join(snp_important_info, teosinte_transpose, by = ""SNP_ID"")"

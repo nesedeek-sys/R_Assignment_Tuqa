@@ -1,0 +1,3 @@
+"0","genotypes <- read_tsv(""data/fang_et_al_genotypes.txt"")"
+"0","snp_positions <- read_tsv(""data/snp_position.txt"")"
+"0",""

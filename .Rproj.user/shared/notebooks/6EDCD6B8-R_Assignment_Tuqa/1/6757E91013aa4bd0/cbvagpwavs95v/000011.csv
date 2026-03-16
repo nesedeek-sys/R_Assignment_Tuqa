@@ -1,0 +1,3 @@
+"0","maize <- filter(genotypes, Group %in% c(""ZMMIL"", ""ZMMLR"", ""ZMMMR""))"
+"0","teosinte <- filter(genotypes, Group %in% c(""ZMPBA"", ""ZMPIL"", ""ZMPJA""))"
+"0",""

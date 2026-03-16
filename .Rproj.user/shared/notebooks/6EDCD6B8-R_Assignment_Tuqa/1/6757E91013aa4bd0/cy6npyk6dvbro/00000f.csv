@@ -1,0 +1,4 @@
+"0","genotype_columns <- 4:ncol(genotypes)"
+"0","maize_genotypes <- maize[, genotype_columns]"
+"0","teosinte_genotypes <- teosinte[, genotype_columns]"
+"0",""

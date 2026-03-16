@@ -1,0 +1,3 @@
+"0","maize_all_joined <- filter(maize_all_joined, !is.na(Chromosome), !is.na(Position))"
+"0","teosinte_all_joined <- filter(teosinte_all_joined, !is.na(Chromosome), !is.na(Position))"
+"0",""
