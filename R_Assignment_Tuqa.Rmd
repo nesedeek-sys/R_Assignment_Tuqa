@@ -7,24 +7,292 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+
+rm(list = ls())
+library(tidyverse)
 ```
 
-## R Markdown
+```{r load-data}
+genotypes <- read_tsv("data/fang_et_al_genotypes.txt")
+snp_positions <- read_tsv("data/snp_position.txt")
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
-
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
-
-```{r cars}
-summary(cars)
 ```
 
-## Including Plots
+```{r inspect data}
+dim(genotypes)
+dim(snp_positions)
 
-You can also embed plots, for example:
+names(genotypes)
+names(snp_positions)
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+str(genotypes)
+str(snp_positions)
+
+head(genotypes)
+head(snp_positions)
+
+names(genotypes)[3]
+unique(genotypes[[3]])
+
+```
+```{r}
+maize <- filter(genotypes, Group %in% c("ZMMIL", "ZMMLR", "ZMMMR"))
+teosinte <- filter(genotypes, Group %in% c("ZMPBA", "ZMPIL", "ZMPJA"))
+
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+```{r remove metadata and include onlt SNPs columns in maize and teosinte files}
+genotype_columns <- 4:ncol(genotypes)
+maize_genotypes <- maize[, genotype_columns]
+teosinte_genotypes <- teosinte[, genotype_columns]
+
+```
+
+```{r transpose }
+maize_transpose <- as.data.frame(t(maize_genotypes))
+teosinte_transpose <- as.data.frame(t(teosinte_genotypes))
+
+colnames(maize_transpose) <- maize[[1]]
+colnames(teosinte_transpose) <- teosinte[[1]]
+
+maize_transpose$SNP_ID <- rownames(maize_transpose)
+teosinte_transpose$SNP_ID <- rownames(teosinte_transpose)
+
+maize_transpose <- select(maize_transpose, SNP_ID, everything())
+teosinte_transpose <- select(teosinte_transpose, SNP_ID, everything())
+
+rownames(maize_transpose) <- NULL
+rownames(teosinte_transpose) <- NULL
+
+```
+
+```{r Prepare the SNP position table}
+snp_important_info <- select(snp_positions, 1, 3, 4)
+
+```
+
+```{r joining}
+maize_all_joined <- inner_join(snp_important_info, maize_transpose, by = "SNP_ID")
+teosinte_all_joined <- inner_join(snp_important_info, teosinte_transpose, by = "SNP_ID")
+```
+
+```{r}
+class(maize_all_joined$Chromosome)
+class(maize_all_joined$Position)
+
+maize_all_joined <- mutate(maize_all_joined, Chromosome = as.numeric(Chromosome), Position = as.numeric(Position))
+teosinte_all_joined <- mutate(teosinte_all_joined, Chromosome = as.numeric(Chromosome), Position = as.numeric(Position))
+
+class(maize_all_joined$Chromosome)
+class(maize_all_joined$Position)
+```
+```{r remove SNPs with multiple or unkonwn positions}
+maize_all_joined <- filter(maize_all_joined, !is.na(Chromosome), !is.na(Position))
+teosinte_all_joined <- filter(teosinte_all_joined, !is.na(Chromosome), !is.na(Position))
+
+```
+
+
+```{r Defining the fuction to creating the chomosome files}
+create_chromosome_files <- function(df, group) {
+  lapply(1:10, function(chromosome_number) {
+    
+    chromosome_df <- filter(df, Chromosome == chromosome_number)
+    
+    chromosome_increasing_order <- chromosome_df %>%
+      arrange(Position) %>%
+      mutate(across(4:ncol(.), ~replace(., . == "?/?", "?")))
+    
+    chromosome_decreasing_order <- chromosome_df %>%
+      arrange(desc(Position)) %>%
+      mutate(across(4:ncol(.), ~replace(., . == "?/?", "-")))
+    
+    write_tsv(
+      chromosome_increasing_order,
+      paste0("output/processed_files/", group, "_chromosome", chromosome_number, "_increasing_order.txt")
+    )
+    
+    write_tsv(
+      chromosome_decreasing_order,
+      paste0("output/processed_files/", group, "_chromosome", chromosome_number, "_decreasing_order.txt")
+    )
+  })
+}
+
+```
+
+
+```{r Create the chomosome files}
+create_chromosome_files(maize_all_joined, "maize")
+create_chromosome_files(teosinte_all_joined, "teosinte")
+
+```
+
+
+```{r Plot 1}
+
+maize_modified_for_plot <- maize_all_joined %>%
+  select(SNP_ID, Chromosome, Position) %>%
+  mutate(Group = "Maize")
+
+teosinte_modified_for_plot <- teosinte_all_joined %>%
+  select(SNP_ID, Chromosome, Position) %>%
+  mutate(Group = "Teosinte")
+
+total_snp_modified_for_plot <- bind_rows(maize_modified_for_plot, teosinte_modified_for_plot)
+
+p1 <- ggplot(total_snp_modified_for_plot, aes(x = factor(Chromosome), fill = Group)) +
+  geom_bar(position = "dodge") +
+  labs(
+    title = "Number of positions per Chromosome",
+    x = "Chromosome",
+    y = "Number of positions"
+  ) 
+p1
+ggsave("output/visuals/positions_per_chromosome.png", plot = p1, width = 8, height = 5)
+  
+
+```
+
+
+
+```{r trial 2 of plot 1}
+polymolrphic_SNPs_in_maize <- maize_all_joined %>%
+  mutate(
+    Polymorphic = apply(select(., 4:ncol(.)), 1, function(x) {
+      x <- x[!x %in% c("?/?")]
+      length(unique(x)) > 1
+    })
+  )
+
+polymorphic_SNPs_in_teosinte <- teosinte_all_joined %>%
+  mutate(
+    Polymorphic = apply(select(., 4:ncol(.)), 1, function(x) {
+      x <- x[!x %in% c("?/?")]
+      length(unique(x)) > 1
+    })
+  )
+
+snps_in_Maize_final <- polymolrphic_SNPs_in_maize %>%
+  filter(Polymorphic) %>%
+  mutate(Group = "Maize")
+
+snps_in_Teosinte_final <- polymorphic_SNPs_in_teosinte %>%
+  filter(Polymorphic) %>%
+  mutate(Group = "Teosinte")
+
+final_poly_snp <- bind_rows(snps_in_Maize_final, snps_in_Teosinte_final)
+
+p2 <- ggplot(final_poly_snp, aes(x = factor(Chromosome), fill = Group)) +
+  geom_bar(position = "dodge") +
+  labs(
+    title = "Number of Polymorphic SNP Sites per Chromosome",
+    x = "Chromosome",
+    y = "Number of Polymorphic SNP Sites"
+  )
+p2
+ggsave("output/visuals/polymorphic_SNPs_per_chromosome.png", plot = p2, width = 8, height = 5)
+
+
+```
+
+```{r}
+Maize_Long <- maize_all_joined %>%
+  pivot_longer(
+    cols = 4:ncol(.),
+    names_to = "Sample",
+    values_to = "Genotype"
+  ) %>%
+  mutate(Group = "Maize")
+
+Teosinte_Long <- teosinte_all_joined %>%
+  pivot_longer(
+    cols = 4:ncol(.),
+    names_to = "Sample",
+    values_to = "Genotype"
+  ) %>%
+  mutate(Group = "Teosinte")
+
+Teosinte_and_Maize_Long <- bind_rows(Maize_Long, Teosinte_Long)
+
+Teosinte_and_Maize_Long <- Teosinte_and_Maize_Long %>%
+  mutate(
+    Genotype_Class = case_when(
+      Genotype %in% c("?/?") ~ "Missing",
+      Genotype %in% c("A/A", "C/C", "G/G", "T/T") ~ "Homozygous",
+      TRUE ~ "Heterozygous"
+    )
+  )
+
+p3 <- ggplot(Teosinte_and_Maize_Long, aes(x = Sample, fill = Genotype_Class)) +
+  geom_bar(position = "fill") +
+  facet_wrap(~ Group, scales = "free_x") +
+  labs(
+    title = "Proportion of Missing, Homozygous, and Heterozygous Sites",
+    x = "Sample",
+    y = "Proportion"
+  ) +
+  theme(axis.text.x = element_blank(),
+        axis.ticks.x = element_blank())
+
+p3
+
+ggsave("output/visuals/genotype_class_by_sample.png", plot = p3, width = 8, height = 5)
+
+
+```
+
+```{r Summarize proportions by group}
+
+proportions_per_group_summary <- Teosinte_and_Maize_Long %>%
+  count(Group, Genotype_Class) %>%
+  group_by(Group) %>%
+  mutate(Proportion = n / sum(n))
+
+p4 <- ggplot (proportions_per_group_summary, aes(x = Group, y = Proportion, fill = Genotype_Class)) +
+  geom_col(position = "fill") +
+  labs(
+    title = "Genotype Class Proportions by Group",
+    x = "Group",
+    y = "Proportion"
+  )
+p4
+ggsave("output/visuals/proportions_per_group.png", plot = p4, width = 8, height = 5)
+
+
+```
+
+
+```{r Missing data by chromosome and group}
+missing_by_chromosome <- Teosinte_and_Maize_Long %>%
+  mutate(Is_Missing = Genotype_Class == "Missing") %>%
+  group_by(Group, Chromosome) %>%
+  summarise(
+    Missing_Proportion = mean(Is_Missing),
+    .groups = "drop"
+  )
+
+p5 <- ggplot(missing_by_chromosome, aes(x = factor(Chromosome), y = Missing_Proportion, fill = Group)) +
+  geom_col(position = "dodge") +
+  labs(
+    title = "Proportion of Missing Data by Chromosome",
+    x = "Chromosome",
+    y = "Missing Data Proportion"
+  ) 
+
+p5
+ggsave("output/visuals/missing_data_per_chromosome_and_group.png", plot = p5, width = 8, height = 5)
+
+```
+```{r Zygosity Across Chromosomes}
+ 
+p6 <- ggplot(Teosinte_and_Maize_Long, aes(x = as.factor(Chromosome), fill = Genotype_Class)) +
+  geom_bar(position = "fill") +
+  labs(title = "Proportion of Genotype Class Across Chromosomes", x = "Chromosome", y = "Proportion")
+p6
+ggsave("output/visuals/proportion_of_genotype_class_per_chromosome.png", plot = p6, width = 8, height = 5)
+
+```
+
+
+
