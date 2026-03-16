@@ -1,6 +1,6 @@
 # Tuqa's R Assignment
 
-This repository contains my submission for the R assignment. It is manily about data inspection, processing, and visualization of SNP data from maize and teosinte.
+This repository contains my submission for the R assignment. It is mainly about data inspection, processing, and visualization of SNP data from maize and teosinte.
 
 ## Repository organization
 
